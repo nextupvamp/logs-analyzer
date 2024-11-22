@@ -1,11 +1,11 @@
 package ru.nextupvamp.io;
 
 import org.junit.jupiter.api.Test;
-import ru.nextupvamp.data.ArgsData;
-import ru.nextupvamp.data.LogsStatistics;
 import ru.nextupvamp.handlers.ArgsHandler;
-import ru.nextupvamp.handlers.log_handlers.LogsStatisticsGatherer;
-import ru.nextupvamp.handlers.log_handlers.NginxLogsHandler;
+import ru.nextupvamp.data.HandledArgsData;
+import ru.nextupvamp.data.statistics.LogsStatistics;
+import ru.nextupvamp.handlers.loghandlers.NginxLogsHandler;
+import ru.nextupvamp.handlers.loghandlers.NginxLogsStatisticsGatherer;
 
 import java.io.*;
 import java.util.Objects;
@@ -20,32 +20,32 @@ public class ReportCreatorTest {
     @Test
     public void testADocReportCreate() {
         String[] args = {
-                "--path",
-                LogsReaderTest.TEST_DIR_PATH + LogsReaderTest.SEPARATOR + "logs1.txt",
-                "--format",
-                "adoc"
+            "--path",
+            LogsReaderTest.TEST_DIR_PATH + LogsReaderTest.SEPARATOR + "logs1.txt",
+            "--format",
+            "adoc"
         };
 
         ArgsHandler argsHandler = new ArgsHandler(args);
-        ArgsData argsData = argsHandler.handle();
-        LogsStatisticsGatherer logsStatisticsGatherer = new LogsStatisticsGatherer(
-                argsData.paths(),
-                argsData.from(),
-                argsData.to(),
-                argsData.filterField(),
-                argsData.filterValuePattern(),
-                new NginxLogsHandler()
-        );
-        LogsStatistics ls = logsStatisticsGatherer.gatherStatistics();
+        HandledArgsData handledArgsData = argsHandler.handle();
+        NginxLogsStatisticsGatherer nginxLogsStatisticsGatherer = NginxLogsStatisticsGatherer.builder()
+            .paths(handledArgsData.paths())
+            .from(handledArgsData.from())
+            .to(handledArgsData.to())
+            .filterField(handledArgsData.filterField())
+            .filterValuePattern(handledArgsData.filterValuePattern())
+            .logsHandler(new NginxLogsHandler())
+            .build();
+        LogsStatistics ls = nginxLogsStatisticsGatherer.gatherStatistics();
 
-        ReportCreator.createReport(ls, argsData.format(), BAOSPrintStream);
+        new ReportCreator(BAOSPrintStream, handledArgsData.format(), ls).createReport();
 
         String report = BAOS.toString();
         BufferedReader br = new BufferedReader(
-                new InputStreamReader(
-                        Objects.requireNonNull(
-                                ReportCreatorTest.class.getClassLoader().getResourceAsStream("report_example.adoc"))
-                )
+            new InputStreamReader(
+                Objects.requireNonNull(
+                    ReportCreatorTest.class.getClassLoader().getResourceAsStream("report_example.adoc"))
+            )
         );
 
         String expected = br.lines().collect(Collectors.joining(System.lineSeparator()));
@@ -56,30 +56,30 @@ public class ReportCreatorTest {
     @Test
     public void testMarkdownReportCreate() {
         String[] args = {
-                "--path",
-                LogsReaderTest.TEST_DIR_PATH + LogsReaderTest.SEPARATOR + "logs1.txt"
+            "--path",
+            LogsReaderTest.TEST_DIR_PATH + LogsReaderTest.SEPARATOR + "logs1.txt"
         };
 
         ArgsHandler argsHandler = new ArgsHandler(args);
-        ArgsData argsData = argsHandler.handle();
-        LogsStatisticsGatherer logsStatisticsGatherer = new LogsStatisticsGatherer(
-                argsData.paths(),
-                argsData.from(),
-                argsData.to(),
-                argsData.filterField(),
-                argsData.filterValuePattern(),
-                new NginxLogsHandler()
-        );
-        LogsStatistics ls = logsStatisticsGatherer.gatherStatistics();
+        HandledArgsData handledArgsData = argsHandler.handle();
+        NginxLogsStatisticsGatherer nginxLogsStatisticsGatherer = NginxLogsStatisticsGatherer.builder()
+            .paths(handledArgsData.paths())
+            .from(handledArgsData.from())
+            .to(handledArgsData.to())
+            .filterField(handledArgsData.filterField())
+            .filterValuePattern(handledArgsData.filterValuePattern())
+            .logsHandler(new NginxLogsHandler())
+            .build();
+        LogsStatistics ls = nginxLogsStatisticsGatherer.gatherStatistics();
 
-        ReportCreator.createReport(ls, argsData.format(), BAOSPrintStream);
+        new ReportCreator(BAOSPrintStream, handledArgsData.format(), ls).createReport();
 
         String report = BAOS.toString();
         BufferedReader br = new BufferedReader(
-                new InputStreamReader(
-                        Objects.requireNonNull(
-                                ReportCreatorTest.class.getClassLoader().getResourceAsStream("report_example.md"))
-                )
+            new InputStreamReader(
+                Objects.requireNonNull(
+                    ReportCreatorTest.class.getClassLoader().getResourceAsStream("report_example.md"))
+            )
         );
 
         String expected = br.lines().collect(Collectors.joining(System.lineSeparator()));

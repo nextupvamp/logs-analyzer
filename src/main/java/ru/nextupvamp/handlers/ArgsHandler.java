@@ -1,10 +1,12 @@
 package ru.nextupvamp.handlers;
 
+import com.beust.jcommander.JCommander;
 import lombok.SneakyThrows;
-import ru.nextupvamp.data.ArgsData;
+import ru.nextupvamp.data.Args;
+import ru.nextupvamp.data.HandledArgsData;
 import ru.nextupvamp.data.PathsData;
-import ru.nextupvamp.io.formatters.ADocFormatter;
 import ru.nextupvamp.io.formatters.MarkdownFormatter;
+import ru.nextupvamp.io.formatters.TextFormats;
 import ru.nextupvamp.io.formatters.TextFormatter;
 
 import java.net.URI;
@@ -12,42 +14,47 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class ArgsHandler {
+    private static final Set<Character> SPECIAL_SYMBOLS = new HashSet<>();
+    private static final Pattern URI_PATTERN = Pattern.compile("^(http|https|ftp|file)://.*");
+
+    static {
+        SPECIAL_SYMBOLS.add('*');
+        SPECIAL_SYMBOLS.add('?');
+        SPECIAL_SYMBOLS.add('{');
+        SPECIAL_SYMBOLS.add('[');
+    }
+
     private final String[] args;
-    private final List<Path> paths = new ArrayList<>();
-    private final List<URI> uris = new ArrayList<>();
-    private ZonedDateTime from;
-    private ZonedDateTime to;
-    private TextFormatter format;
-    private String filterField;
-    private Pattern filterValuePattern;
 
     public ArgsHandler(String[] args) {
         this.args = args;
     }
 
-    public ArgsData handle() {
-        // the loop iterates through keys ignoring parameters.
-        // if it meets parameter on its way, an exception will be thrown
-        for (int i = 0; i < args.length; ++i) {
-            if (isKey(args[i])) {
-                i = switch (args[i]) {
-                    case "--path" -> getPaths(i);
-                    case "--from" -> getFromTime(i);
-                    case "--to" -> getToTime(i);
-                    case "--format" -> getFormat(i);
-                    case "--filter-field" -> getFilterField(i);
-                    case "--filter-value" -> getFilterValuePattern(i);
-                    default -> throw new IllegalArgumentException("Unknown key: " + args[i]);
-                };
-            } else {
-                throw new IllegalArgumentException("Excepted key on argument position " + i);
-            }
-        }
-        if (paths.isEmpty() && uris.isEmpty()) {
+    @SuppressWarnings({"checkstyle:ModifiedControlVariable", "checkstyle:CyclomaticComplexity"})
+    public HandledArgsData handle() {
+        Args parsedArgs = new Args();
+        JCommander.newBuilder()
+            .addObject(parsedArgs)
+            .build()
+            .parse(args);
+
+        PathsData handledPaths = handlePaths(parsedArgs.paths());
+        ZonedDateTime handledFrom = returnNullOrResult(parsedArgs.from(), ZonedDateTime::parse);
+        ZonedDateTime handledTo = returnNullOrResult(parsedArgs.to(), ZonedDateTime::parse);
+        TextFormatter formatter = getFormatter(parsedArgs.format());
+        String filterField = returnNullOrResult(parsedArgs.filterField(), it -> it);
+        Pattern filterValuePattern = returnNullOrResult(parsedArgs.filterValue(), Pattern::compile);
+        String reportFileName = returnNullOrResult(parsedArgs.reportFileName(), it -> it);
+
+        if (handledPaths.paths().isEmpty() && handledPaths.uris().isEmpty()) {
             throw new IllegalArgumentException("Missing paths");
         }
         if (filterField != null && filterValuePattern == null) {
@@ -56,186 +63,105 @@ public class ArgsHandler {
         if (filterField == null && filterValuePattern != null) {
             throw new IllegalArgumentException("Excepted filter field");
         }
-        if (from != null && to != null) {
-            if (from.isAfter(to)) {
+        if (handledFrom != null && handledTo != null) {
+            if (handledFrom.isAfter(handledTo)) {
                 throw new IllegalArgumentException("From date is after To date");
             }
-            if (to.isBefore(from)) {
+            if (handledTo.isBefore(handledFrom)) {
                 throw new IllegalArgumentException("To date is before From date");
+
             }
         }
-        if (format == null) {
-            format = new MarkdownFormatter();
-        }
 
-        return new ArgsData(
-                new PathsData(uris, paths),
-                from,
-                to,
-                format,
-                filterField,
-                filterValuePattern
-        );
+        return HandledArgsData.builder()
+            .paths(handledPaths)
+            .from(handledFrom)
+            .to(handledTo)
+            .format(formatter)
+            .filterField(filterField)
+            .filterValuePattern(filterValuePattern)
+            .reportFileName(reportFileName)
+            .build();
     }
 
-    /**
-     * Iterates through paths until meet another key or the end
-     * and adds them into collection.
-     *
-     * @param pos position of <code>--path</code> key
-     * @return position of the last resolved path
-     */
-    @SneakyThrows
-    public int getPaths(int pos) {
-        int newPos = pos + 1;
-        // loop starts from key parameters
-        for (; newPos < args.length; ++newPos) {
-            String currentArg = args[newPos];
-            // end loop if another key
-            if (isKey(currentArg)) {
-                break;
-            }
+    private PathsData handlePaths(List<String> parsedPaths) {
+        List<URI> uris = new ArrayList<>();
+        List<Path> paths = new ArrayList<>();
 
-            if (currentArg.matches("^(http|https|ftp|file)://.*")) {
-                uris.add(URI.create(currentArg));
+        for (var currentPath : parsedPaths) {
+            Matcher matcher = URI_PATTERN.matcher(currentPath);
+            if (matcher.matches()) {
+                uris.add(URI.create(currentPath));
             } else {
-                // if path doesn't contain any glob patterns
+                // if path doesn't contain any glob symbols
                 // that mean we deal with a single file
-                if (findSpecialSymbolIndex(currentArg) == -1) {
-                    paths.add(Paths.get(currentArg));
+                if (findFirstGlobSymbolIndex(currentPath) == -1) {
+                    paths.add(Paths.get(currentPath));
                 } else {
-                    Path rootDir = extractRootDir(currentArg);
-                    String pattern = extractPattern(currentArg);
-                    Files.walkFileTree(rootDir, new SimpleFileVisitor<>() {
-                        @Override
-                        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                            PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:"
-                                    + pattern);
-                            Path relativePath = rootDir.relativize(file);
-                            if (matcher.matches(relativePath)) {
-                                paths.add(file.toAbsolutePath());
-                            }
-                            return FileVisitResult.CONTINUE;
-                        }
-                    });
+                    findFilePathsByGlobPattern(currentPath, paths);
                 }
             }
         }
-        return newPos - 1; // returns pos of the last arg
+        return new PathsData(uris, paths);
     }
 
-    /**
-     * Tries to parse a zoned date time right after
-     * the <code>--from</code> key.
-     *
-     * @param pos position of <code>--from</code> key
-     * @return position of parsed zoned date time
-     */
-    public int getFromTime(int pos) {
-        int newPos = pos + 1;
-        if (newPos < args.length && !isKey(args[newPos])) {
-            from = ZonedDateTime.parse(args[newPos]);
-        } else {
-            throw new IllegalArgumentException("Excepted date after --from on argument position " + newPos);
+    @SneakyThrows
+    private void findFilePathsByGlobPattern(String currentPath, List<Path> paths) {
+        // find the root dir that will be the root
+        // of file tree that we'll walk through
+        Path rootDir = extractRootDir(currentPath);
+        // extract the glob pattern of filepath that we
+        // are searching to
+        String pattern = extractPattern(currentPath);
+        // now walk through our file tree, visit all the
+        // files on the way and check if they match
+        // the pattern
+        Files.walkFileTree(rootDir, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:"
+                    + pattern);
+                Path relativePath = rootDir.relativize(file);
+                if (matcher.matches(relativePath)) {
+                    paths.add(file.toAbsolutePath());
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+
+    private TextFormatter getFormatter(String formatString) {
+        if (formatString == null) {
+            return new MarkdownFormatter();
         }
 
-        return newPos;
-    }
-
-    /**
-     * Tries to parse a zoned date time right after
-     * the <code>--to</code> key.
-     *
-     * @param pos position of <code>--to</code> key
-     * @return position of parsed zoned date time
-     */
-    public int getToTime(int pos) {
-        int newPos = pos + 1;
-        if (newPos < args.length && !isKey(args[newPos])) {
-            to = ZonedDateTime.parse(args[newPos]);
-        } else {
-            throw new IllegalArgumentException("Excepted date after --to on argument position " + newPos);
+        TextFormats[] availableTextFormats = TextFormats.values();
+        for (TextFormats currentTextFormats : availableTextFormats) {
+            if (currentTextFormats.format().equalsIgnoreCase(formatString)) {
+                return currentTextFormats.formatter();
+            }
         }
 
-        return newPos;
+        throw new IllegalArgumentException("Unknown format: " + formatString);
     }
 
-    /**
-     * Tries to parse a format right after
-     * the <code>--format</code> key.
-     *
-     * @param pos position of <code>--format</code> key
-     * @return position of parsed format
-     */
-    public int getFormat(int pos) {
-        int newPos = pos + 1;
-        if (newPos < args.length && !isKey(args[newPos])) {
-            format = switch (args[newPos]) {
-                case "markdown" -> new MarkdownFormatter();
-                case "adoc" -> new ADocFormatter();
-                default -> throw new IllegalArgumentException("Unsupported format: " + args[newPos]);
-            };
-        } else {
-            throw new IllegalArgumentException("Excepted format after --format on argument position " + newPos);
+    private <T, R> R returnNullOrResult(T object, Function<T, R> function) {
+        if (object == null) {
+            return null;
         }
 
-        return newPos;
+        return function.apply(object);
     }
 
-    /**
-     * Tries to parse a filter field right after
-     * the <code>--filter-field</code> key.
-     *
-     * @param pos position of <code>--filter-field</code> key
-     * @return position of parsed filter field
-     */
-    public int getFilterField(int pos) {
-        int newPos = pos + 1;
-        if (newPos < args.length && !isKey(args[newPos])) {
-            filterField = args[newPos];
-        } else {
-            throw new IllegalArgumentException(
-                    "Excepted filter field after --filter-field on argument position " + newPos);
-        }
-
-        return newPos;
-    }
-
-    /**
-     * Tries to parse a filter value right after
-     * the <code>--filter-value</code> key.
-     *
-     * @param pos position of <code>--filter-value</code> key
-     * @return position of parsed filter value
-     */
-    public int getFilterValuePattern(int pos) {
-        int newPos = pos + 1;
-        if (newPos < args.length && !isKey(args[newPos])) {
-            filterValuePattern = Pattern.compile(args[newPos]);
-        } else {
-            throw new IllegalArgumentException(
-                    "Excepted filter value after --filter-value on argument position " + newPos);
-        }
-
-        return newPos;
-    }
-
-    /**
-     * Finds the last file in the path without any
-     * pattern symbols and extracts path of this
-     * file from the original path <code>pathString</code>.
-     *
-     * @param pathString original path
-     * @return path of the last file without any pattern symbols
-     */
     private Path extractRootDir(String pathString) {
-        int specialSymbolIndex = findSpecialSymbolIndex(pathString);
+        int specialSymbolIndex = findFirstGlobSymbolIndex(pathString);
 
         if (specialSymbolIndex == -1) {
             return Paths.get(pathString);
         }
 
-        int separatorBeforeSpecialSymbolIndex = getSeparatorBeforeSpecialSymbolIndex(pathString, specialSymbolIndex);
+        int separatorBeforeSpecialSymbolIndex =
+            getFirstSeparatorBeforeSpecialSymbolIndex(pathString, specialSymbolIndex);
 
         if (separatorBeforeSpecialSymbolIndex == -1) {
             return Paths.get(pathString);
@@ -247,15 +173,7 @@ public class ArgsHandler {
         return Paths.get(currentDirectory.toString(), editedPathString).normalize();
     }
 
-    /**
-     * Finds the index of file separator before
-     * glob-pattern symbol.
-     *
-     * @param pathString         full file path
-     * @param specialSymbolIndex index of pattern symbol
-     * @return index of special pattern symbol
-     */
-    private int getSeparatorBeforeSpecialSymbolIndex(String pathString, int specialSymbolIndex) {
+    private int getFirstSeparatorBeforeSpecialSymbolIndex(String pathString, int specialSymbolIndex) {
         int separatorBeforeSpecialSymbolIndex = -1;
         String separator = FileSystems.getDefault().getSeparator();
         for (int i = specialSymbolIndex; i >= 0; --i) {
@@ -267,22 +185,15 @@ public class ArgsHandler {
         return separatorBeforeSpecialSymbolIndex;
     }
 
-    /**
-     * Extracts glob pattern from filepath. The method
-     * finds the first file with any pattern symbols
-     * and truncates everything before it in the path.
-     *
-     * @param pathString file path
-     * @return glob file pattern
-     */
     private String extractPattern(String pathString) {
-        int specialSymbolIndex = findSpecialSymbolIndex(pathString);
+        int specialSymbolIndex = findFirstGlobSymbolIndex(pathString);
 
         if (specialSymbolIndex == -1) {
             return pathString;
         }
 
-        int separatorBeforeSpecialSymbolIndex = getSeparatorBeforeSpecialSymbolIndex(pathString, specialSymbolIndex);
+        int separatorBeforeSpecialSymbolIndex =
+            getFirstSeparatorBeforeSpecialSymbolIndex(pathString, specialSymbolIndex);
 
         if (separatorBeforeSpecialSymbolIndex == -1) {
             return pathString;
@@ -291,34 +202,16 @@ public class ArgsHandler {
         return pathString.substring(separatorBeforeSpecialSymbolIndex + 1);
     }
 
-    /**
-     * Finds an index of the first glob pattern
-     * symbol.
-     *
-     * @param pathString file path
-     * @return index of the first glob pattern symbol
-     */
-    private int findSpecialSymbolIndex(String pathString) {
+    private int findFirstGlobSymbolIndex(String pathString) {
         int specialSymbolIndex = -1;
         for (int i = 0; i != pathString.length(); ++i) {
             char ch = pathString.charAt(i);
-            if (ch == '*' || ch == '?' || ch == '[' || ch == '{') {
+            if (SPECIAL_SYMBOLS.contains(ch)) {
                 specialSymbolIndex = i;
                 break;
             }
         }
 
         return specialSymbolIndex;
-    }
-
-    /**
-     * Checks if argument is the key.
-     *
-     * @param arg argument
-     * @return <code>true</code> if an argument is the key,
-     * <code>false</code> if it isn't
-     */
-    private boolean isKey(String arg) {
-        return arg.matches("^--.*");
     }
 }

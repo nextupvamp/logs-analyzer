@@ -2,7 +2,7 @@ package ru.nextupvamp.io;
 
 import lombok.SneakyThrows;
 import ru.nextupvamp.data.LogData;
-import ru.nextupvamp.handlers.log_handlers.LogsHandler;
+import ru.nextupvamp.handlers.loghandlers.NginxLogsHandler;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -23,7 +23,7 @@ public class LogsReader implements AutoCloseable {
     private final HttpClient httpClient = HttpClient.newHttpClient();
 
     @SneakyThrows
-    public Stream<LogData> readFromFileAsStream(Path file, LogsHandler handler) {
+    public Stream<LogData> readFromFileAsStream(Path file, NginxLogsHandler handler) {
         inputStream = Files.newInputStream(file);
         initReaders(inputStream);
 
@@ -31,10 +31,10 @@ public class LogsReader implements AutoCloseable {
     }
 
     @SneakyThrows
-    public Stream<LogData> readFromUriAsStream(URI uri, LogsHandler handler) {
+    public Stream<LogData> readFromUriAsStream(URI uri, NginxLogsHandler handler) {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(uri)
-                .build();
+            .uri(uri)
+            .build();
         inputStream = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream()).body();
         initReaders(inputStream);
 

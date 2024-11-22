@@ -1,11 +1,12 @@
 package ru.nextupvamp.handlers;
 
+import com.beust.jcommander.ParameterException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import ru.nextupvamp.data.ArgsData;
+import ru.nextupvamp.data.HandledArgsData;
 import ru.nextupvamp.data.PathsData;
 
 import java.net.URI;
@@ -23,27 +24,27 @@ public class ArgsHandlerTest {
     @SneakyThrows
     public void urlPathTest() {
         String[] args = {
-                "--path",
-                "http://example.com",
-                "https://example.com",
-                "ftp://example.com",
-                "file:///home/user/file.txt",
-                "http://example.com:8080/path/to/resource",
-                "https://example.com/resource?query=param",
-                "http://example.com/path#section",
-                "https://example.com/path?name=value&other=param#fragment",
-                "--format",
-                "adoc"
+            "--path",
+            "http://example.com",
+            "https://example.com",
+            "ftp://example.com",
+            "file:///home/user/file.txt",
+            "http://example.com:8080/path/to/resource",
+            "https://example.com/resource?query=param",
+            "http://example.com/path#section",
+            "https://example.com/path?name=value&other=param#fragment",
+            "--format",
+            "adoc"
         };
         List<URI> correctUris = Stream.of(
-                "http://example.com",
-                "https://example.com",
-                "ftp://example.com",
-                "file:///home/user/file.txt",
-                "http://example.com:8080/path/to/resource",
-                "https://example.com/resource?query=param",
-                "http://example.com/path#section",
-                "https://example.com/path?name=value&other=param#fragment"
+            "http://example.com",
+            "https://example.com",
+            "ftp://example.com",
+            "file:///home/user/file.txt",
+            "http://example.com:8080/path/to/resource",
+            "https://example.com/resource?query=param",
+            "http://example.com/path#section",
+            "https://example.com/path?name=value&other=param#fragment"
         ).map(URI::create).toList();
         PathsData paths = new ArgsHandler(args).handle().paths();
         assertEquals(correctUris, paths.uris());
@@ -54,33 +55,33 @@ public class ArgsHandlerTest {
     @SneakyThrows
     public void singleFilePathTest() {
         String[] args = {
-                "--path",
-                "C:\\Users\\user\\Documents\\file.txt",
-                "C:\\Program Files\\app\\config.cfg",
-                "C:\\",
-                "C:\\folder\\subfolder\\",
-                "/home/user/file.txt",
-                "/etc/nginx/nginx.conf",
-                "/var/log/",
-                "/",
-                "file.txt",
-                "./file.txt",
-                "../file.txt",
-                "subfolder/file.txt"
+            "--path",
+            "C:\\Users\\user\\Documents\\file.txt",
+            "C:\\Program Files\\app\\config.cfg",
+            "C:\\",
+            "C:\\folder\\subfolder\\",
+            "/home/user/file.txt",
+            "/etc/nginx/nginx.conf",
+            "/var/log/",
+            "/",
+            "file.txt",
+            "./file.txt",
+            "../file.txt",
+            "subfolder/file.txt"
         };
         List<Path> correctPaths = Stream.of(
-                "C:\\Users\\user\\Documents\\file.txt",
-                "C:\\Program Files\\app\\config.cfg",
-                "C:\\",
-                "C:\\folder\\subfolder\\",
-                "/home/user/file.txt",
-                "/etc/nginx/nginx.conf",
-                "/var/log/",
-                "/",
-                "file.txt",
-                "./file.txt",
-                "../file.txt",
-                "subfolder/file.txt"
+            "C:\\Users\\user\\Documents\\file.txt",
+            "C:\\Program Files\\app\\config.cfg",
+            "C:\\",
+            "C:\\folder\\subfolder\\",
+            "/home/user/file.txt",
+            "/etc/nginx/nginx.conf",
+            "/var/log/",
+            "/",
+            "file.txt",
+            "./file.txt",
+            "../file.txt",
+            "subfolder/file.txt"
         ).map(Path::of).toList();
         PathsData paths = new ArgsHandler(args).handle().paths();
         assertEquals(correctPaths, paths.paths());
@@ -89,17 +90,17 @@ public class ArgsHandlerTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-            "2024-10-15T12:34:56Z",
-            "2024-10-15T12:34:56+02:00",
-            "2024-10-15T12:34:56-05:00",
+        "2024-10-15T12:34:56Z",
+        "2024-10-15T12:34:56+02:00",
+        "2024-10-15T12:34:56-05:00",
     }
     )
     public void fromDateTest(String inputDate) {
         String[] args = {
-                "--path",
-                "logs.txt",
-                "--from",
-                inputDate
+            "--path",
+            "logs.txt",
+            "--from",
+            inputDate
         };
 
         ZonedDateTime zdt = new ArgsHandler(args).handle().from();
@@ -109,17 +110,17 @@ public class ArgsHandlerTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-            "2024-10-15T12:34:56Z",
-            "2024-10-15T12:34:56+02:00",
-            "2024-10-15T12:34:56-05:00",
+        "2024-10-15T12:34:56Z",
+        "2024-10-15T12:34:56+02:00",
+        "2024-10-15T12:34:56-05:00",
     }
     )
     public void toDateTest(String inputDate) {
         String[] args = {
-                "--path",
-                "logs.txt",
-                "--to",
-                inputDate
+            "--path",
+            "logs.txt",
+            "--to",
+            inputDate
         };
 
         ZonedDateTime zdt = new ArgsHandler(args).handle().to();
@@ -129,17 +130,17 @@ public class ArgsHandlerTest {
 
     @ParameterizedTest
     @CsvSource({
-            "2024-10-15T12:34:56Z,2024-10-15T12:34:56Z",
-            "2024-10-15T12:34:55Z,2024-10-15T12:34:57Z"
+        "2024-10-15T12:34:56Z,2024-10-15T12:34:56Z",
+        "2024-10-15T12:34:55Z,2024-10-15T12:34:57Z"
     })
     public void fromToDateValidTest(String fromDate, String toDate) {
         String[] args = {
-                "--path",
-                "logs.txt",
-                "--from",
-                fromDate,
-                "--to",
-                toDate
+            "--path",
+            "logs.txt",
+            "--from",
+            fromDate,
+            "--to",
+            toDate
         };
 
         ArgsHandler argsHandler = new ArgsHandler(args);
@@ -153,12 +154,12 @@ public class ArgsHandlerTest {
     @Test
     public void fromToDAteInvalidTest() {
         String[] args = {
-                "--path",
-                "logs.txt",
-                "--from",
-                "2024-10-15T12:34:56Z",
-                "--to",
-                "2024-10-14T12:34:56Z"
+            "--path",
+            "logs.txt",
+            "--from",
+            "2024-10-15T12:34:56Z",
+            "--to",
+            "2024-10-14T12:34:56Z"
         };
 
         ArgsHandler argsHandler = new ArgsHandler(args);
@@ -168,22 +169,22 @@ public class ArgsHandlerTest {
 
     @ParameterizedTest
     @CsvSource({
-            "3.*,300",
-            "[A-Z]+,ENVELOPE",
-            "[a-z_]+,void_sx"
+        "3.*,300",
+        "[A-Z]+,ENVELOPE",
+        "[a-z_]+,void_sx"
     })
     public void filterValueTest(String regex, String value) {
         String[] args = {
-                "--path",
-                "logs.txt",
-                "--filter-field",
-                "smth",
-                "--filter-value",
-                regex
+            "--path",
+            "logs.txt",
+            "--filter-field",
+            "smth",
+            "--filter-value",
+            regex
         };
         ArgsHandler argsHandler = new ArgsHandler(args);
-        ArgsData argsData = argsHandler.handle();
-        Pattern pattern = argsData.filterValuePattern();
+        HandledArgsData handledArgsData = argsHandler.handle();
+        Pattern pattern = handledArgsData.filterValuePattern();
         Matcher matcher = pattern.matcher(value);
 
         assertTrue(matcher.matches());
@@ -191,15 +192,15 @@ public class ArgsHandlerTest {
 
     @ParameterizedTest
     @CsvSource({
-            "--path,--fromat,adoc",
-            "-path,logs.txt",
-            "--path,logs.txt,--from,2024-10-15T12:34:59Z,--to,2024-10-15T12:34:56Z", // from after to
-            "--path,logs.txt,--filter-field,field", // filter field w/o filter value
-            "--path,logs.txt,--filter-value,value" // filter value w/o filter field
+        "--path,--fromat,adoc",
+        "-path,logs.txt",
+        "--path,logs.txt,--from,2024-10-15T12:34:59Z,--to,2024-10-15T12:34:56Z", // from after to
+        "--path,logs.txt,--filter-field,field", // filter field w/o filter value
+        "--path,logs.txt,--filter-value,value" // filter value w/o filter field
     })
     public void testWrongParameters(String input) {
         String[] args = input.split(",");
         ArgsHandler argsHandler = new ArgsHandler(args);
-        assertThrows(IllegalArgumentException.class, argsHandler::handle);
+        assertThrows(ParameterException.class, argsHandler::handle);
     }
 }

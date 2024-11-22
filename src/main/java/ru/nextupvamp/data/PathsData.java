@@ -5,7 +5,7 @@ import java.nio.file.Path;
 import java.util.List;
 
 public record PathsData(
-        List<URI> uris,
-        List<Path> paths
+    List<URI> uris,
+    List<Path> paths
 ) {
 }

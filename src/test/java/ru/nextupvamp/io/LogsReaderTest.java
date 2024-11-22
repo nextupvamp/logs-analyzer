@@ -4,10 +4,10 @@ import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import ru.nextupvamp.handlers.ArgsHandler;
 import ru.nextupvamp.data.LogData;
 import ru.nextupvamp.data.PathsData;
-import ru.nextupvamp.handlers.ArgsHandler;
-import ru.nextupvamp.handlers.log_handlers.NginxLogsHandler;
+import ru.nextupvamp.handlers.loghandlers.NginxLogsHandler;
 
 import java.net.URI;
 import java.nio.file.FileSystems;
@@ -26,8 +26,8 @@ public class LogsReaderTest {
     static {
         try {
             TEST_REMOTE_URI =
-                    new URI(
-                            "https://raw.githubusercontent.com/elastic/examples/master/Common%20Data%20Formats/nginx_logs/nginx_logs");
+                new URI(
+                    "https://raw.githubusercontent.com/elastic/examples/master/Common%20Data%20Formats/nginx_logs/nginx_logs");
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
@@ -62,8 +62,8 @@ public class LogsReaderTest {
     public void testLocalFilePatternRead(String input) {
         String pattern = TEST_DIR_PATH + SEPARATOR + input;
         String[] args = {
-                "--path",
-                pattern
+            "--path",
+            pattern
         };
         ArgsHandler argsHandler = new ArgsHandler(args);
         PathsData logPaths = argsHandler.handle().paths();
@@ -76,8 +76,8 @@ public class LogsReaderTest {
         // test_dir/../**logs* - rather interesting, innit?
         String pattern = TEST_DIR_PATH + SEPARATOR + ".." + SEPARATOR + "**log*";
         String[] args = {
-                "--path",
-                pattern
+            "--path",
+            pattern
         };
         ArgsHandler argsHandler = new ArgsHandler(args);
         PathsData logPaths = argsHandler.handle().paths();
